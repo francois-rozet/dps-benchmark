@@ -1,0 +1,15 @@
+data:
+  name: ffhq
+  root: ./data/inpainting_box/
+
+measurement:
+  operator:
+    name: inpainting
+  mask_opt:
+    mask_type: box
+    mask_len_range: !!python/tuple [128, 129]
+    image_size: 256
+
+  noise:
+    name: gaussian
+    sigma: 1.0

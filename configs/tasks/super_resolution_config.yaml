@@ -1,12 +1,6 @@
-conditioning:
-  method: mmps
-  params:
-    scale: 1.0
-    maxiter: 1
-
 data:
   name: ffhq
-  root: ./data/samples/
+  root: ./data/super_resolution/
 
 measurement:
   operator:
@@ -16,4 +10,4 @@ measurement:
 
   noise:
     name: gaussian
-    sigma: 1.0
+    sigma: 0.1

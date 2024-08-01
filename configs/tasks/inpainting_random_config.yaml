@@ -1,0 +1,15 @@
+data:
+  name: ffhq
+  root: ./data/inpainting_random/
+
+measurement:
+  operator:
+    name: inpainting
+  mask_opt:
+    mask_type: random
+    mask_prob_range: !!python/tuple [0.99, 0.99]
+    image_size: 256
+
+  noise:
+    name: gaussian
+    sigma: 0.01

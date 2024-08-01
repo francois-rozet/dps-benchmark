@@ -191,7 +191,7 @@ class GaussianDiffusion:
         img = x_start
         device = x_start.device
 
-        pbar = tqdm(list(range(self.num_timesteps))[::-1])
+        pbar = tqdm(list(range(self.num_timesteps))[::-1], ncols=88)
         for idx in pbar:
             time = torch.tensor([idx] * img.shape[0], device=device)
 

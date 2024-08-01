@@ -1,8 +1,3 @@
-conditioning:
-  method: ps
-  params:
-    scale: 0.3
-
 data:
   name: ffhq
   root: ./data/samples/
@@ -12,6 +7,6 @@ measurement:
     name: nonlinear_blur
     opt_yml_path: ./bkse/options/generate_blur/default.yml
 
-  noise: 
+  noise:
     name: gaussian
     sigma: 0.05

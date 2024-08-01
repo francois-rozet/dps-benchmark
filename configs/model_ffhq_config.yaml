@@ -1,5 +1,3 @@
-# Defaults for image training.
-
 image_size: 256
 num_channels: 128
 num_res_blocks: 1

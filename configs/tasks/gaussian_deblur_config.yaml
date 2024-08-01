@@ -1,18 +1,13 @@
-conditioning:
-  method: ps
-  params:
-    scale: 0.3
-
 data:
   name: ffhq
   root: ./data/samples/
 
 measurement:
   operator:
-    name: motion_blur
+    name: gaussian_blur
     kernel_size: 61
-    intensity: 0.5
+    intensity: 3.0
 
-  noise: 
+  noise:
     name: gaussian
     sigma: 0.05

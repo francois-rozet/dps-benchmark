@@ -1,18 +1,20 @@
-from functools import partial
 import os
 import argparse
 import yaml
 
 import numpy
+import matplotlib.pyplot as plt
 import torch
 import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
 
+from dawgz import job, schedule
+from functools import partial
+
+from data.dataloader import get_dataset, get_dataloader
 from guided_diffusion.condition_methods import get_conditioning_method
 from guided_diffusion.measurements import get_noise, get_operator
 from guided_diffusion.unet import create_model
 from guided_diffusion.gaussian_diffusion import create_sampler
-from data.dataloader import get_dataset, get_dataloader
 from util.img_utils import clear_color, mask_generator
 from util.logger import get_logger
 
@@ -23,64 +25,50 @@ def load_yaml(file_path: str) -> dict:
     return config
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_config",
-        type=str,
-        default="./configs/model_config.yaml",
-    )
-    parser.add_argument(
-        "--diffusion_config",
-        type=str,
-        default="./configs/diffusion_config.yaml",
-    )
-    parser.add_argument("--task_config", type=str)
-    parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--save_dir", type=str, default="./results")
-    parser.add_argument("--seed", type=int, default=0)
-    args = parser.parse_args()
-
+def main(
+    model_config: dict,
+    diffusion_config: dict,
+    task_config: dict,
+    method_config: dict,
+    basename: str,
+    root: str,
+    seed: int = 0,
+    gpu: int = 0,
+):
     # Logger
     logger = get_logger()
 
     # RNG
-    numpy.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    numpy.random.seed(seed)
+    torch.manual_seed(seed)
+    logger.info(f"Random seed set to {seed}.")
 
     # Device setting
-    device_str = f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu"
+    device_str = f"cuda:{gpu}" if torch.cuda.is_available() else "cpu"
     logger.info(f"Device set to {device_str}.")
     device = torch.device(device_str)
-
-    # Load configurations
-    model_config = load_yaml(args.model_config)
-    diffusion_config = load_yaml(args.diffusion_config)
-    task_config = load_yaml(args.task_config)
-
-    # assert model_config['learn_sigma'] == diffusion_config['learn_sigma'], \
-    # "learn_sigma must be the same for model and diffusion configuartion."
 
     # Load model
     model = create_model(**model_config)
     model = model.to(device)
     model.eval()
 
-    # Prepare Operator and noise
+    # Prepare operator and noise
     measure_config = task_config["measurement"]
     operator = get_operator(device=device, **measure_config["operator"])
     noiser = get_noise(**measure_config["noise"])
-    logger.info(
-        f"Operation: {measure_config['operator']['name']} / Noise: {measure_config['noise']['name']}"
-    )
+    logger.info(f"Task: {measure_config['operator']['name']}")
 
     # Prepare conditioning method
-    cond_config = task_config["conditioning"]
     cond_method = get_conditioning_method(
-        cond_config["method"], operator, noiser, **cond_config["params"]
+        method_config["name"], operator, noiser, **method_config["params"]
     )
     measurement_cond_fn = cond_method.conditioning
-    logger.info(f"Conditioning method : {task_config['conditioning']['method']}")
+    logger.info(f"Method: {method_config['name']}")
+
+    ## In case of inpainting, we need to generate a mask
+    if measure_config["operator"]["name"] == "inpainting":
+        mask_gen = mask_generator(**measure_config["mask_opt"])
 
     # Load diffusion sampler
     sampler = create_sampler(**diffusion_config)
@@ -91,10 +79,7 @@ def main():
     )
 
     # Working directory
-    out_path = os.path.join(args.save_dir, measure_config["operator"]["name"])
-    os.makedirs(out_path, exist_ok=True)
-    for img_dir in ["input", "recon", "progress", "label"]:
-        os.makedirs(os.path.join(out_path, img_dir), exist_ok=True)
+    os.makedirs(root, exist_ok=True)
 
     # Prepare dataloader
     data_config = task_config["data"]
@@ -104,45 +89,112 @@ def main():
     dataset = get_dataset(**data_config, transforms=transform)
     loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
-    # Exception) In case of inpainting, we need to generate a mask
-    if measure_config["operator"]["name"] == "inpainting":
-        mask_gen = mask_generator(**measure_config["mask_opt"])
+    # Run inference
+    for i, x in enumerate(loader):
+        x = x.to(device)
 
-    # Do Inference
-    for i, ref_img in enumerate(loader):
-        logger.info(f"Inference for image {i}")
-        fname = str(i).zfill(5) + ".png"
-        ref_img = ref_img.to(device)
-
-        # Exception) In case of inpainging,
         if measure_config["operator"]["name"] == "inpainting":
-            mask = mask_gen(ref_img)
+            mask = mask_gen(x)
             mask = mask[:, 0, :, :].unsqueeze(dim=0)
             measurement_cond_fn = partial(cond_method.conditioning, mask=mask)
             sample_fn = partial(sample_fn, measurement_cond_fn=measurement_cond_fn)
 
-            # Forward measurement model (Ax + n)
-            y = operator.forward(ref_img, mask=mask)
-            y_n = noiser(y)
-
+            y = noiser(operator.forward(x, mask=mask))
         else:
-            # Forward measurement model (Ax + n)
-            y = operator.forward(ref_img)
-            y_n = noiser(y)
+            y = noiser(operator.forward(x))
 
         # Sampling
-        x_start = torch.randn(ref_img.shape, device=device).requires_grad_()
-        sample = sample_fn(
+        x_start = torch.randn(x.shape, device=device).requires_grad_()
+        x_pred = sample_fn(
             x_start=x_start,
-            measurement=y_n,
+            measurement=y,
             record=False,
-            save_root=out_path,
+            save_root=None,
         )
 
-        plt.imsave(os.path.join(out_path, "input", fname), clear_color(y_n))
-        plt.imsave(os.path.join(out_path, "label", fname), clear_color(ref_img))
-        plt.imsave(os.path.join(out_path, "recon", fname), clear_color(sample))
+        plt.imsave(
+            os.path.join(root, f"{basename}_{i:03}_measurement.png"), clear_color(y)
+        )
+        plt.imsave(
+            os.path.join(root, f"{basename}_{i:03}_prediction.png"), clear_color(x_pred)
+        )
+
+    print(flush=True)
+
+    logger.info(f"Memory: {torch.cuda.max_memory_allocated(device) / 2**30}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--model_config",
+        type=str,
+        default="./configs/model_ffhq_config.yaml",
+    )
+    parser.add_argument(
+        "--diffusion_config",
+        type=str,
+        default="./configs/diffusion_config.yaml",
+    )
+    parser.add_argument(
+        "--task_config",
+        type=str,
+        default="./configs/tasks/inpainting_random_config.yaml",
+    )
+    parser.add_argument("--method", type=str, default="mmps")
+    parser.add_argument("--scale", type=float, default=1.0)
+    parser.add_argument("--maxiter", type=int, default=1)
+    parser.add_argument("--steps", type=int, default=100)
+    parser.add_argument("--root", type=str, default="./results")
+    parser.add_argument("--basename", type=str, default="image")
+    parser.add_argument("--gpu", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--slurm", default=False, action="store_true")
+    args = parser.parse_args()
+
+    # Configs
+    model_config = load_yaml(args.model_config)
+    diffusion_config = load_yaml(args.diffusion_config)
+    diffusion_config["timestep_respacing"] = args.steps
+    task_config = load_yaml(args.task_config)
+    method_config = {
+        "name": args.method,
+        "params": {
+            "scale": args.scale,
+            "maxiter": args.maxiter,
+        },
+    }
+
+    # Run
+    f = partial(
+        main,
+        model_config=model_config,
+        diffusion_config=diffusion_config,
+        task_config=task_config,
+        method_config=method_config,
+        basename=args.basename,
+        root=args.root,
+        gpu=args.gpu,
+        seed=args.seed,
+    )
+
+    if args.slurm:
+        from dawgz import job, schedule
+
+        schedule(
+            job(
+                f,
+                name=args.basename,
+                cpus=1,
+                gpus=1,
+                ram="16GB",
+                time="05:00",
+                partition="gpu",
+            ),
+            name=args.basename,
+            backend="slurm",
+            export="ALL",
+            account="ariacpg",
+        )
+    else:
+        f()
