@@ -18,7 +18,7 @@ def clear_color(x):
 
 
 def normalize_np(img):
-    """ Normalize img in arbitrary range to [0, 1] """
+    """Normalize img in arbitrary range to [0, 1]"""
     img -= np.min(img)
     img /= np.max(img)
     return img
@@ -26,9 +26,9 @@ def normalize_np(img):
 
 def pil_loader(path):
     # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
-    with open(path, 'rb') as f:
+    with open(path, "rb") as f:
         img = Image.open(f)
-        return img.convert('RGB')
+        return img.convert("RGB")
 
 
 def default_loader(path):
@@ -42,7 +42,9 @@ def tensor_img_to_npimg(tensor_img):
     :return: a numpy array image with shape HxWxC
     """
     if not (torch.is_tensor(tensor_img) and tensor_img.ndimension() == 3):
-        raise NotImplementedError("Not supported tensor image. Only tensors with dimension CxHxW are supported.")
+        raise NotImplementedError(
+            "Not supported tensor image. Only tensors with dimension CxHxW are supported."
+        )
     npimg = np.transpose(tensor_img.numpy(), (1, 2, 0))
     npimg = npimg.squeeze()
     assert isinstance(npimg, np.ndarray) and (npimg.ndim in {2, 3})
@@ -53,6 +55,7 @@ def tensor_img_to_npimg(tensor_img):
 def normalize(x):
     return x.mul_(2).add_(-1)
 
+
 def same_padding(images, ksizes, strides, rates):
     assert len(images.size()) == 4
     batch_size, channel, rows, cols = images.size()
@@ -60,11 +63,11 @@ def same_padding(images, ksizes, strides, rates):
     out_cols = (cols + strides[1] - 1) // strides[1]
     effective_k_row = (ksizes[0] - 1) * rates[0] + 1
     effective_k_col = (ksizes[1] - 1) * rates[1] + 1
-    padding_rows = max(0, (out_rows-1)*strides[0]+effective_k_row-rows)
-    padding_cols = max(0, (out_cols-1)*strides[1]+effective_k_col-cols)
+    padding_rows = max(0, (out_rows - 1) * strides[0] + effective_k_row - rows)
+    padding_cols = max(0, (out_cols - 1) * strides[1] + effective_k_col - cols)
     # Pad the input
-    padding_top = int(padding_rows / 2.)
-    padding_left = int(padding_cols / 2.)
+    padding_top = int(padding_rows / 2.0)
+    padding_left = int(padding_cols / 2.0)
     padding_bottom = padding_rows - padding_top
     padding_right = padding_cols - padding_left
     paddings = (padding_left, padding_right, padding_top, padding_bottom)
@@ -72,7 +75,7 @@ def same_padding(images, ksizes, strides, rates):
     return images
 
 
-def extract_image_patches(images, ksizes, strides, rates, padding='same'):
+def extract_image_patches(images, ksizes, strides, rates, padding="same"):
     """
     Extract patches from images and put them in the C output dimension.
     :param padding:
@@ -84,21 +87,22 @@ def extract_image_patches(images, ksizes, strides, rates, padding='same'):
     :return: A Tensor
     """
     assert len(images.size()) == 4
-    assert padding in ['same', 'valid']
+    assert padding in ["same", "valid"]
     batch_size, channel, height, width = images.size()
 
-    if padding == 'same':
+    if padding == "same":
         images = same_padding(images, ksizes, strides, rates)
-    elif padding == 'valid':
+    elif padding == "valid":
         pass
     else:
-        raise NotImplementedError('Unsupported padding type: {}.\
-                Only "same" or "valid" are supported.'.format(padding))
+        raise NotImplementedError(
+            'Unsupported padding type: {}.\
+                Only "same" or "valid" are supported.'.format(padding)
+        )
 
-    unfold = torch.nn.Unfold(kernel_size=ksizes,
-                             dilation=rates,
-                             padding=0,
-                             stride=strides)
+    unfold = torch.nn.Unfold(
+        kernel_size=ksizes, dilation=rates, padding=0, stride=strides
+    )
     patches = unfold(images)
     return patches  # [N, C*k*k, L], L is the total number of such blocks
 
@@ -113,13 +117,13 @@ def random_bbox(config, batch_size):
         tuple: (top, left, height, width)
 
     """
-    img_height, img_width, _ = config['image_shape']
-    h, w = config['mask_shape']
-    margin_height, margin_width = config['margin']
+    img_height, img_width, _ = config["image_shape"]
+    h, w = config["mask_shape"]
+    margin_height, margin_width = config["margin"]
     maxt = img_height - margin_height - h
     maxl = img_width - margin_width - w
     bbox_list = []
-    if config['mask_batch_same']:
+    if config["mask_batch_same"]:
         t = np.random.randint(margin_height, maxt)
         l = np.random.randint(margin_width, maxl)
         bbox_list.append((t, l, h, w))
@@ -148,7 +152,12 @@ def bbox2mask(bboxes, height, width, max_delta_h, max_delta_w):
         bbox = bboxes[i]
         delta_h = np.random.randint(max_delta_h // 2 + 1)
         delta_w = np.random.randint(max_delta_w // 2 + 1)
-        mask[i, :, bbox[0] + delta_h:bbox[0] + bbox[2] - delta_h, bbox[1] + delta_w:bbox[1] + bbox[3] - delta_w] = 1.
+        mask[
+            i,
+            :,
+            bbox[0] + delta_h : bbox[0] + bbox[2] - delta_h,
+            bbox[1] + delta_w : bbox[1] + bbox[3] - delta_w,
+        ] = 1.0
     return mask
 
 
@@ -158,7 +167,9 @@ def test_bbox2mask():
     margin = [0, 0]
     max_delta_shape = [32, 32]
     bbox = random_bbox(image_shape)
-    mask = bbox2mask(bbox, image_shape[0], image_shape[1], max_delta_shape[0], max_delta_shape[1])
+    mask = bbox2mask(
+        bbox, image_shape[0], image_shape[1], max_delta_shape[0], max_delta_shape[1]
+    )
     return mask
 
 
@@ -167,27 +178,31 @@ def local_patch(x, bbox_list):
     patches = []
     for i, bbox in enumerate(bbox_list):
         t, l, h, w = bbox
-        patches.append(x[i, :, t:t + h, l:l + w])
+        patches.append(x[i, :, t : t + h, l : l + w])
     return torch.stack(patches, dim=0)
 
 
 def mask_image(x, bboxes, config):
-    height, width, _ = config['image_shape']
-    max_delta_h, max_delta_w = config['max_delta_shape']
+    height, width, _ = config["image_shape"]
+    max_delta_h, max_delta_w = config["max_delta_shape"]
     mask = bbox2mask(bboxes, height, width, max_delta_h, max_delta_w)
     if x.is_cuda:
         mask = mask.cuda()
 
-    if config['mask_type'] == 'hole':
-        result = x * (1. - mask)
-    elif config['mask_type'] == 'mosaic':
+    if config["mask_type"] == "hole":
+        result = x * (1.0 - mask)
+    elif config["mask_type"] == "mosaic":
         # TODO: Matching the mosaic patch size and the mask size
-        mosaic_unit_size = config['mosaic_unit_size']
-        downsampled_image = F.interpolate(x, scale_factor=1. / mosaic_unit_size, mode='nearest')
-        upsampled_image = F.interpolate(downsampled_image, size=(height, width), mode='nearest')
-        result = upsampled_image * mask + x * (1. - mask)
+        mosaic_unit_size = config["mosaic_unit_size"]
+        downsampled_image = F.interpolate(
+            x, scale_factor=1.0 / mosaic_unit_size, mode="nearest"
+        )
+        upsampled_image = F.interpolate(
+            downsampled_image, size=(height, width), mode="nearest"
+        )
+        result = upsampled_image * mask + x * (1.0 - mask)
     else:
-        raise NotImplementedError('Not implemented mask type.')
+        raise NotImplementedError("Not implemented mask type.")
 
     return result, mask
 
@@ -206,22 +221,22 @@ def spatial_discounting_mask(config):
         tf.Tensor: spatial discounting mask
 
     """
-    gamma = config['spatial_discounting_gamma']
-    height, width = config['mask_shape']
+    gamma = config["spatial_discounting_gamma"]
+    height, width = config["mask_shape"]
     shape = [1, 1, height, width]
-    if config['discounted_mask']:
+    if config["discounted_mask"]:
         mask_values = np.ones((height, width))
         for i in range(height):
             for j in range(width):
                 mask_values[i, j] = max(
-                    gamma ** min(i, height - i),
-                    gamma ** min(j, width - j))
+                    gamma ** min(i, height - i), gamma ** min(j, width - j)
+                )
         mask_values = np.expand_dims(mask_values, 0)
         mask_values = np.expand_dims(mask_values, 0)
     else:
         mask_values = np.ones(shape)
     spatial_discounting_mask_tensor = torch.tensor(mask_values, dtype=torch.float32)
-    if config['cuda']:
+    if config["cuda"]:
         spatial_discounting_mask_tensor = spatial_discounting_mask_tensor.cuda()
     return spatial_discounting_mask_tensor
 
@@ -235,7 +250,7 @@ def reduce_mean(x, axis=None, keepdim=False):
 
 
 def normalize_np(img):
-    """ Normalize img in arbitrary range to [0, 1] """
+    """Normalize img in arbitrary range to [0, 1]"""
     img -= np.min(img)
     img /= np.max(img)
     return img
@@ -272,10 +287,10 @@ def flow_to_image(flow):
     Part of code forked from flownet.
     """
     out = []
-    maxu = -999.
-    maxv = -999.
-    minu = 999.
-    minv = 999.
+    maxu = -999.0
+    maxv = -999.0
+    minu = 999.0
+    minv = 999.0
     maxrad = -1
     for i in range(flow.shape[0]):
         u = flow[i, :, :, 0]
@@ -287,7 +302,7 @@ def flow_to_image(flow):
         minu = min(minu, np.min(u))
         maxv = max(maxv, np.max(v))
         minv = min(minv, np.min(v))
-        rad = np.sqrt(u ** 2 + v ** 2)
+        rad = np.sqrt(u**2 + v**2)
         maxrad = max(maxrad, np.max(rad))
         u = u / (maxrad + np.finfo(float).eps)
         v = v / (maxrad + np.finfo(float).eps)
@@ -322,7 +337,7 @@ def pt_flow_to_image(flow):
         minu = torch.min(minu, torch.min(u))
         maxv = torch.max(maxv, torch.max(v))
         minv = torch.min(minv, torch.min(v))
-        rad = torch.sqrt((u ** 2 + v ** 2).float()).to(torch.int64)
+        rad = torch.sqrt((u**2 + v**2).float()).to(torch.int64)
         maxrad = torch.max(maxrad, torch.max(rad))
         u = u / (maxrad + torch.finfo(torch.float32).eps)
         v = v / (maxrad + torch.finfo(torch.float32).eps)
@@ -334,37 +349,35 @@ def pt_flow_to_image(flow):
 
 
 def highlight_flow(flow):
-    """Convert flow into middlebury color code image.
-    """
+    """Convert flow into middlebury color code image."""
     out = []
     s = flow.shape
     for i in range(flow.shape[0]):
-        img = np.ones((s[1], s[2], 3)) * 144.
+        img = np.ones((s[1], s[2], 3)) * 144.0
         u = flow[i, :, :, 0]
         v = flow[i, :, :, 1]
         for h in range(s[1]):
             for w in range(s[1]):
                 ui = u[h, w]
                 vi = v[h, w]
-                img[ui, vi, :] = 255.
+                img[ui, vi, :] = 255.0
         out.append(img)
     return np.float32(np.uint8(out))
 
 
 def pt_highlight_flow(flow):
-    """Convert flow into middlebury color code image.
-        """
+    """Convert flow into middlebury color code image."""
     out = []
     s = flow.shape
     for i in range(flow.shape[0]):
-        img = np.ones((s[1], s[2], 3)) * 144.
+        img = np.ones((s[1], s[2], 3)) * 144.0
         u = flow[i, :, :, 0]
         v = flow[i, :, :, 1]
         for h in range(s[1]):
             for w in range(s[1]):
                 ui = u[h, w]
                 vi = v[h, w]
-                img[ui, vi, :] = 255.
+                img[ui, vi, :] = 255.0
         out.append(img)
     return np.float32(np.uint8(out))
 
@@ -378,7 +391,7 @@ def compute_color(u, v):
     # colorwheel = COLORWHEEL
     colorwheel = make_color_wheel()
     ncols = np.size(colorwheel, 0)
-    rad = np.sqrt(u ** 2 + v ** 2)
+    rad = np.sqrt(u**2 + v**2)
     a = np.arctan2(-v, -u) / np.pi
     fk = (a + 1) / 2 * (ncols - 1) + 1
     k0 = np.floor(fk).astype(int)
@@ -404,14 +417,14 @@ def pt_compute_color(u, v):
     if torch.cuda.is_available():
         img = img.cuda()
     nanIdx = (torch.isnan(u) + torch.isnan(v)) != 0
-    u[nanIdx] = 0.
-    v[nanIdx] = 0.
+    u[nanIdx] = 0.0
+    v[nanIdx] = 0.0
     # colorwheel = COLORWHEEL
     colorwheel = pt_make_color_wheel()
     if torch.cuda.is_available():
         colorwheel = colorwheel.cuda()
     ncols = colorwheel.size()[0]
-    rad = torch.sqrt((u ** 2 + v ** 2).to(torch.float32))
+    rad = torch.sqrt((u**2 + v**2).to(torch.float32))
     a = torch.atan2(-v.to(torch.float32), -u.to(torch.float32)) / np.pi
     fk = (a + 1) / 2 * (ncols - 1) + 1
     k0 = torch.floor(fk).to(torch.int64)
@@ -423,9 +436,9 @@ def pt_compute_color(u, v):
         col0 = tmp[k0 - 1]
         col1 = tmp[k1 - 1]
         col = (1 - f) * col0 + f * col1
-        idx = rad <= 1. / 255.
+        idx = rad <= 1.0 / 255.0
         col[idx] = 1 - rad[idx] * (1 - col[idx])
-        notidx = (idx != 0)
+        notidx = idx != 0
         col[notidx] *= 0.75
         img[i, :, :] = col * (1 - nanIdx).to(torch.float32)
     return img
@@ -441,24 +454,30 @@ def make_color_wheel():
     colorwheel[0:RY, 1] = np.transpose(np.floor(255 * np.arange(0, RY) / RY))
     col += RY
     # YG
-    colorwheel[col:col + YG, 0] = 255 - np.transpose(np.floor(255 * np.arange(0, YG) / YG))
-    colorwheel[col:col + YG, 1] = 255
+    colorwheel[col : col + YG, 0] = 255 - np.transpose(
+        np.floor(255 * np.arange(0, YG) / YG)
+    )
+    colorwheel[col : col + YG, 1] = 255
     col += YG
     # GC
-    colorwheel[col:col + GC, 1] = 255
-    colorwheel[col:col + GC, 2] = np.transpose(np.floor(255 * np.arange(0, GC) / GC))
+    colorwheel[col : col + GC, 1] = 255
+    colorwheel[col : col + GC, 2] = np.transpose(np.floor(255 * np.arange(0, GC) / GC))
     col += GC
     # CB
-    colorwheel[col:col + CB, 1] = 255 - np.transpose(np.floor(255 * np.arange(0, CB) / CB))
-    colorwheel[col:col + CB, 2] = 255
+    colorwheel[col : col + CB, 1] = 255 - np.transpose(
+        np.floor(255 * np.arange(0, CB) / CB)
+    )
+    colorwheel[col : col + CB, 2] = 255
     col += CB
     # BM
-    colorwheel[col:col + BM, 2] = 255
-    colorwheel[col:col + BM, 0] = np.transpose(np.floor(255 * np.arange(0, BM) / BM))
-    col += + BM
+    colorwheel[col : col + BM, 2] = 255
+    colorwheel[col : col + BM, 0] = np.transpose(np.floor(255 * np.arange(0, BM) / BM))
+    col += +BM
     # MR
-    colorwheel[col:col + MR, 2] = 255 - np.transpose(np.floor(255 * np.arange(0, MR) / MR))
-    colorwheel[col:col + MR, 0] = 255
+    colorwheel[col : col + MR, 2] = 255 - np.transpose(
+        np.floor(255 * np.arange(0, MR) / MR)
+    )
+    colorwheel[col : col + MR, 0] = 255
     return colorwheel
 
 
@@ -468,33 +487,39 @@ def pt_make_color_wheel():
     colorwheel = torch.zeros([ncols, 3])
     col = 0
     # RY
-    colorwheel[0:RY, 0] = 1.
+    colorwheel[0:RY, 0] = 1.0
     colorwheel[0:RY, 1] = torch.arange(0, RY, dtype=torch.float32) / RY
     col += RY
     # YG
-    colorwheel[col:col + YG, 0] = 1. - (torch.arange(0, YG, dtype=torch.float32) / YG)
-    colorwheel[col:col + YG, 1] = 1.
+    colorwheel[col : col + YG, 0] = 1.0 - (
+        torch.arange(0, YG, dtype=torch.float32) / YG
+    )
+    colorwheel[col : col + YG, 1] = 1.0
     col += YG
     # GC
-    colorwheel[col:col + GC, 1] = 1.
-    colorwheel[col:col + GC, 2] = torch.arange(0, GC, dtype=torch.float32) / GC
+    colorwheel[col : col + GC, 1] = 1.0
+    colorwheel[col : col + GC, 2] = torch.arange(0, GC, dtype=torch.float32) / GC
     col += GC
     # CB
-    colorwheel[col:col + CB, 1] = 1. - (torch.arange(0, CB, dtype=torch.float32) / CB)
-    colorwheel[col:col + CB, 2] = 1.
+    colorwheel[col : col + CB, 1] = 1.0 - (
+        torch.arange(0, CB, dtype=torch.float32) / CB
+    )
+    colorwheel[col : col + CB, 2] = 1.0
     col += CB
     # BM
-    colorwheel[col:col + BM, 2] = 1.
-    colorwheel[col:col + BM, 0] = torch.arange(0, BM, dtype=torch.float32) / BM
+    colorwheel[col : col + BM, 2] = 1.0
+    colorwheel[col : col + BM, 0] = torch.arange(0, BM, dtype=torch.float32) / BM
     col += BM
     # MR
-    colorwheel[col:col + MR, 2] = 1. - (torch.arange(0, MR, dtype=torch.float32) / MR)
-    colorwheel[col:col + MR, 0] = 1.
+    colorwheel[col : col + MR, 2] = 1.0 - (
+        torch.arange(0, MR, dtype=torch.float32) / MR
+    )
+    colorwheel[col : col + MR, 0] = 1.0
     return colorwheel
 
 
 def is_image_file(filename):
-    IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif']
+    IMG_EXTENSIONS = [".jpg", ".jpeg", ".png", ".ppm", ".bmp", ".pgm", ".tif"]
     filename_lower = filename.lower()
     return any(filename_lower.endswith(extension) for extension in IMG_EXTENSIONS)
 
@@ -506,7 +531,7 @@ def deprocess(img):
 
 # get configs
 def get_config(config):
-    with open(config, 'r') as stream:
+    with open(config, "r") as stream:
         return yaml.load(stream, Loader=yaml.FullLoader)
 
 
@@ -514,8 +539,11 @@ def get_config(config):
 def get_model_list(dirname, key, iteration=0):
     if os.path.exists(dirname) is False:
         return None
-    gen_models = [os.path.join(dirname, f) for f in os.listdir(dirname) if
-                  os.path.isfile(os.path.join(dirname, f)) and key in f and ".pt" in f]
+    gen_models = [
+        os.path.join(dirname, f)
+        for f in os.listdir(dirname)
+        if os.path.isfile(os.path.join(dirname, f)) and key in f and ".pt" in f
+    ]
     if gen_models is None:
         return None
     gen_models.sort()
@@ -523,17 +551,17 @@ def get_model_list(dirname, key, iteration=0):
         last_model_name = gen_models[-1]
     else:
         for model_name in gen_models:
-            if '{:0>8d}'.format(iteration) in model_name:
+            if "{:0>8d}".format(iteration) in model_name:
                 return model_name
-        raise ValueError('Not found models with this iteration')
+        raise ValueError("Not found models with this iteration")
     return last_model_name
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_random_bbox()
     mask = test_bbox2mask()
     print(mask.shape)
     import matplotlib.pyplot as plt
 
-    plt.imshow(mask, cmap='gray')
+    plt.imshow(mask, cmap="gray")
     plt.show()

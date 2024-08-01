@@ -22,6 +22,7 @@ from .nn import (
 
 NUM_CLASSES = 1000
 
+
 def create_model(
     image_size,
     num_channels,
@@ -39,7 +40,7 @@ def create_model(
     resblock_updown=False,
     use_fp16=False,
     use_new_attention_order=False,
-    model_path='',
+    model_path="",
 ):
     if channel_mult == "":
         if image_size == 512:
@@ -64,7 +65,7 @@ def create_model(
     else:
         raise NotImplementedError
 
-    model= UNetModel(
+    model = UNetModel(
         image_size=image_size,
         in_channels=3,
         model_channels=num_channels,
@@ -85,10 +86,11 @@ def create_model(
     )
 
     try:
-        model.load_state_dict(th.load(model_path, map_location='cpu'))
+        model.load_state_dict(th.load(model_path, map_location="cpu"))
     except Exception as e:
         print(f"Got exception: {e} / Randomly initialize")
     return model
+
 
 class AttentionPool2d(nn.Module):
     """
@@ -104,7 +106,7 @@ class AttentionPool2d(nn.Module):
     ):
         super().__init__()
         self.positional_embedding = nn.Parameter(
-            th.randn(embed_dim, spacial_dim ** 2 + 1) / embed_dim ** 0.5
+            th.randn(embed_dim, spacial_dim**2 + 1) / embed_dim**0.5
         )
         self.qkv_proj = conv_nd(1, embed_dim, 3 * embed_dim, 1)
         self.c_proj = conv_nd(1, embed_dim, output_dim or embed_dim, 1)
@@ -392,7 +394,7 @@ def count_flops_attn(model, _x, y):
     # We perform two matmuls with the same number of ops.
     # The first computes the weight matrix, the second computes
     # the combination of the value vectors.
-    matmul_ops = 2 * b * (num_spatial ** 2) * c
+    matmul_ops = 2 * b * (num_spatial**2) * c
     model.total_ops += th.DoubleTensor([matmul_ops])
 
 
@@ -966,7 +968,9 @@ class EncoderUNetModel(nn.Module):
 
 
 class NLayerDiscriminator(nn.Module):
-    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False):
+    def __init__(
+        self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False
+    ):
         super(NLayerDiscriminator, self).__init__()
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
@@ -977,7 +981,7 @@ class NLayerDiscriminator(nn.Module):
         padw = 1
         sequence = [
             nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw),
-            nn.LeakyReLU(0.2, True)
+            nn.LeakyReLU(0.2, True),
         ]
 
         nf_mult = 1
@@ -986,22 +990,36 @@ class NLayerDiscriminator(nn.Module):
             nf_mult_prev = nf_mult
             nf_mult = min(2**n, 8)
             sequence += [
-                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
-                          kernel_size=kw, stride=2, padding=padw, bias=use_bias),
+                nn.Conv2d(
+                    ndf * nf_mult_prev,
+                    ndf * nf_mult,
+                    kernel_size=kw,
+                    stride=2,
+                    padding=padw,
+                    bias=use_bias,
+                ),
                 norm_layer(ndf * nf_mult),
-                nn.LeakyReLU(0.2, True)
+                nn.LeakyReLU(0.2, True),
             ]
 
         nf_mult_prev = nf_mult
         nf_mult = min(2**n_layers, 8)
         sequence += [
-            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
-                      kernel_size=kw, stride=2, padding=padw, bias=use_bias),
+            nn.Conv2d(
+                ndf * nf_mult_prev,
+                ndf * nf_mult,
+                kernel_size=kw,
+                stride=2,
+                padding=padw,
+                bias=use_bias,
+            ),
             norm_layer(ndf * nf_mult),
-            nn.LeakyReLU(0.2, True)
+            nn.LeakyReLU(0.2, True),
         ]
 
-        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=2, padding=padw)] + [nn.Dropout(0.5)]
+        sequence += [
+            nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=2, padding=padw)
+        ] + [nn.Dropout(0.5)]
         if use_sigmoid:
             sequence += [nn.Sigmoid()]
 
@@ -1019,7 +1037,7 @@ class GANLoss(nn.Module):
     """
 
     def __init__(self, gan_mode, target_real_label=1.0, target_fake_label=0.0):
-        """ Initialize the GANLoss class.
+        """Initialize the GANLoss class.
 
         Parameters:
             gan_mode (str) - - the type of GAN objective. It currently supports vanilla, lsgan, and wgangp.
@@ -1030,17 +1048,17 @@ class GANLoss(nn.Module):
         LSGAN needs no sigmoid. vanilla GANs will handle it with BCEWithLogitsLoss.
         """
         super(GANLoss, self).__init__()
-        self.register_buffer('real_label', th.tensor(target_real_label))
-        self.register_buffer('fake_label', th.tensor(target_fake_label))
+        self.register_buffer("real_label", th.tensor(target_real_label))
+        self.register_buffer("fake_label", th.tensor(target_fake_label))
         self.gan_mode = gan_mode
-        if gan_mode == 'lsgan':
+        if gan_mode == "lsgan":
             self.loss = nn.MSELoss()
-        elif gan_mode == 'vanilla':
+        elif gan_mode == "vanilla":
             self.loss = nn.BCEWithLogitsLoss()
-        elif gan_mode in ['wgangp']:
+        elif gan_mode in ["wgangp"]:
             self.loss = None
         else:
-            raise NotImplementedError('gan mode %s not implemented' % gan_mode)
+            raise NotImplementedError("gan mode %s not implemented" % gan_mode)
 
     def get_target_tensor(self, prediction, target_is_real):
         """Create label tensors with the same size as the input.
@@ -1069,10 +1087,10 @@ class GANLoss(nn.Module):
         Returns:
             the calculated loss.
         """
-        if self.gan_mode in ['lsgan', 'vanilla']:
+        if self.gan_mode in ["lsgan", "vanilla"]:
             target_tensor = self.get_target_tensor(prediction, target_is_real)
             loss = self.loss(prediction, target_tensor)
-        elif self.gan_mode == 'wgangp':
+        elif self.gan_mode == "wgangp":
             if target_is_real:
                 loss = -prediction.mean()
             else:
@@ -1080,7 +1098,9 @@ class GANLoss(nn.Module):
         return loss
 
 
-def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
+def cal_gradient_penalty(
+    netD, real_data, fake_data, device, type="mixed", constant=1.0, lambda_gp=10.0
+):
     """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
 
     Arguments:
@@ -1095,23 +1115,38 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
     Returns the gradient penalty loss
     """
     if lambda_gp > 0.0:
-        if type == 'real':   # either use real images, fake images, or a linear interpolation of two.
+        if (
+            type == "real"
+        ):  # either use real images, fake images, or a linear interpolation of two.
             interpolatesv = real_data
-        elif type == 'fake':
+        elif type == "fake":
             interpolatesv = fake_data
-        elif type == 'mixed':
+        elif type == "mixed":
             alpha = th.rand(real_data.shape[0], 1, device=device)
-            alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
+            alpha = (
+                alpha.expand(
+                    real_data.shape[0], real_data.nelement() // real_data.shape[0]
+                )
+                .contiguous()
+                .view(*real_data.shape)
+            )
             interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
         else:
-            raise NotImplementedError('{} not implemented'.format(type))
+            raise NotImplementedError("{} not implemented".format(type))
         interpolatesv.requires_grad_(True)
         disc_interpolates = netD(interpolatesv)
-        gradients = th.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
-                                     grad_outputs=th.ones(disc_interpolates.size()).to(device),
-                                     create_graph=True, retain_graph=True, only_inputs=True)
+        gradients = th.autograd.grad(
+            outputs=disc_interpolates,
+            inputs=interpolatesv,
+            grad_outputs=th.ones(disc_interpolates.size()).to(device),
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )
         gradients = gradients[0].view(real_data.size(0), -1)  # flat the data
-        gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
+        gradient_penalty = (
+            ((gradients + 1e-16).norm(2, dim=1) - constant) ** 2
+        ).mean() * lambda_gp  # added eps
         return gradient_penalty, gradients
     else:
         return 0.0, None

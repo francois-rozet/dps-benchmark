@@ -6,11 +6,20 @@ from torch import nn
 
 
 class Resizer(nn.Module):
-    def __init__(self, in_shape, scale_factor=None, output_shape=None, kernel=None, antialiasing=True):
+    def __init__(
+        self,
+        in_shape,
+        scale_factor=None,
+        output_shape=None,
+        kernel=None,
+        antialiasing=True,
+    ):
         super(Resizer, self).__init__()
 
         # First standardize values and fill missing arguments (if needed) by deriving scale from output shape or vice versa
-        scale_factor, output_shape = self.fix_scale_and_size(in_shape, output_shape, scale_factor)
+        scale_factor, output_shape = self.fix_scale_and_size(
+            in_shape, output_shape, scale_factor
+        )
 
         # Choose interpolation method, each method has the matching kernel size
         method, kernel_width = {
@@ -19,11 +28,11 @@ class Resizer(nn.Module):
             "lanczos3": (lanczos3, 6.0),
             "box": (box, 1.0),
             "linear": (linear, 2.0),
-            None: (cubic, 4.0)  # set default interpolation method as cubic
+            None: (cubic, 4.0),  # set default interpolation method as cubic
         }.get(kernel)
 
         # Antialiasing is only used when downscaling
-        antialiasing *= (np.any(np.array(scale_factor) < 1))
+        antialiasing *= np.any(np.array(scale_factor) < 1)
 
         # Sort indices of dimensions according to scale of each dimension. since we are going dim by dim this is efficient
         sorted_dims = np.argsort(np.array(scale_factor))
@@ -35,8 +44,14 @@ class Resizer(nn.Module):
         for dim in self.sorted_dims:
             # for each coordinate (along 1 dim), calculate which coordinates in the input image affect its result and the
             # weights that multiply the values there to get its result.
-            weights, field_of_view = self.contributions(in_shape[dim], output_shape[dim], scale_factor[dim], method,
-                                                        kernel_width, antialiasing)
+            weights, field_of_view = self.contributions(
+                in_shape[dim],
+                output_shape[dim],
+                scale_factor[dim],
+                method,
+                kernel_width,
+                antialiasing,
+            )
 
             # convert to torch tensor
             weights = torch.tensor(weights.T, dtype=torch.float32)
@@ -44,10 +59,19 @@ class Resizer(nn.Module):
             # We add singleton dimensions to the weight matrix so we can multiply it with the big tensor we get for
             # tmp_im[field_of_view.T], (bsxfun style)
             weights_list.append(
-                nn.Parameter(torch.reshape(weights, list(weights.shape) + (len(scale_factor) - 1) * [1]),
-                             requires_grad=False))
+                nn.Parameter(
+                    torch.reshape(
+                        weights, list(weights.shape) + (len(scale_factor) - 1) * [1]
+                    ),
+                    requires_grad=False,
+                )
+            )
             field_of_view_list.append(
-                nn.Parameter(torch.tensor(field_of_view.T.astype(np.int32), dtype=torch.long), requires_grad=False))
+                nn.Parameter(
+                    torch.tensor(field_of_view.T.astype(np.int32), dtype=torch.long),
+                    requires_grad=False,
+                )
+            )
 
         self.field_of_view = nn.ParameterList(field_of_view_list)
         self.weights = nn.ParameterList(weights_list)
@@ -88,7 +112,9 @@ class Resizer(nn.Module):
         # Fixing output-shape (if given): extending it to the size of the input-shape, by assigning the original input-size
         # to all the unspecified dimensions
         if output_shape is not None:
-            output_shape = list(input_shape[len(output_shape):]) + list(np.uint(np.array(output_shape)))
+            output_shape = list(input_shape[len(output_shape) :]) + list(
+                np.uint(np.array(output_shape))
+            )
 
         # Dealing with the case of non-give scale-factor, calculating according to output-shape. note that this is
         # sub-optimal, because there can be different scales to the same output-shape.
@@ -97,11 +123,15 @@ class Resizer(nn.Module):
 
         # Dealing with missing output-shape. calculating according to scale-factor
         if output_shape is None:
-            output_shape = np.uint(np.ceil(np.array(input_shape) * np.array(scale_factor)))
+            output_shape = np.uint(
+                np.ceil(np.array(input_shape) * np.array(scale_factor))
+            )
 
         return scale_factor, output_shape
 
-    def contributions(self, in_length, out_length, scale, kernel, kernel_width, antialiasing):
+    def contributions(
+        self, in_length, out_length, scale, kernel, kernel_width, antialiasing
+    ):
         # This function calculates a set of 'filters' and a set of field_of_view that will later on be applied
         # such that each position from the field_of_view will be multiplied with a matching filter from the
         # 'weights' based on the interpolation method and the distance of the sub-pixel location from the pixel centers
@@ -109,7 +139,9 @@ class Resizer(nn.Module):
 
         # When anti-aliasing is activated (default and only for downscaling) the receptive field is stretched to size of
         # 1/sf. this means filtering is more 'low-pass filter'.
-        fixed_kernel = (lambda arg: scale * kernel(scale * arg)) if antialiasing else kernel
+        fixed_kernel = (
+            (lambda arg: scale * kernel(scale * arg)) if antialiasing else kernel
+        )
         kernel_width *= 1.0 / scale if antialiasing else 1.0
 
         # These are the coordinates of the output image
@@ -142,12 +174,19 @@ class Resizer(nn.Module):
         # that the pixel in the output image 'sees'. We get a matrix whos horizontal dim is the output pixels (big) and the
         # vertical dim is the pixels it 'sees' (kernel_size + 2)
         field_of_view = np.squeeze(
-            np.int16(np.expand_dims(left_boundary, axis=1) + np.arange(expanded_kernel_width) - 1))
+            np.int16(
+                np.expand_dims(left_boundary, axis=1)
+                + np.arange(expanded_kernel_width)
+                - 1
+            )
+        )
 
         # Assign weight to each pixel in the field of view. A matrix whos horizontal dim is the output pixels and the
         # vertical dim is a list of weights matching to the pixel in the field of view (that are specified in
         # 'field_of_view')
-        weights = fixed_kernel(1.0 * np.expand_dims(match_coordinates, axis=1) - field_of_view - 1)
+        weights = fixed_kernel(
+            1.0 * np.expand_dims(match_coordinates, axis=1) - field_of_view - 1
+        )
 
         # Normalize weights to sum up to 1. be careful from dividing by 0
         sum_weights = np.sum(weights, axis=1)
@@ -155,7 +194,11 @@ class Resizer(nn.Module):
         weights = 1.0 * weights / np.expand_dims(sum_weights, axis=1)
 
         # We use this mirror structure as a trick for reflection padding at the boundaries
-        mirror = np.uint(np.concatenate((np.arange(in_length), np.arange(in_length - 1, -1, step=-1))))
+        mirror = np.uint(
+            np.concatenate(
+                (np.arange(in_length), np.arange(in_length - 1, -1, step=-1))
+            )
+        )
         field_of_view = mirror[np.mod(field_of_view, mirror.shape[0])]
 
         # Get rid of  weights and pixel positions that are of zero weight
@@ -172,16 +215,18 @@ class Resizer(nn.Module):
 
 def cubic(x):
     absx = np.abs(x)
-    absx2 = absx ** 2
-    absx3 = absx ** 3
-    return ((1.5 * absx3 - 2.5 * absx2 + 1) * (absx <= 1) +
-            (-0.5 * absx3 + 2.5 * absx2 - 4 * absx + 2) * ((1 < absx) & (absx <= 2)))
+    absx2 = absx**2
+    absx3 = absx**3
+    return (1.5 * absx3 - 2.5 * absx2 + 1) * (absx <= 1) + (
+        -0.5 * absx3 + 2.5 * absx2 - 4 * absx + 2
+    ) * ((1 < absx) & (absx <= 2))
 
 
 def lanczos2(x):
-    return (((np.sin(pi * x) * np.sin(pi * x / 2) + np.finfo(np.float32).eps) /
-             ((pi ** 2 * x ** 2 / 2) + np.finfo(np.float32).eps))
-            * (abs(x) < 2))
+    return (
+        (np.sin(pi * x) * np.sin(pi * x / 2) + np.finfo(np.float32).eps)
+        / ((pi**2 * x**2 / 2) + np.finfo(np.float32).eps)
+    ) * (abs(x) < 2)
 
 
 def box(x):
@@ -189,9 +234,10 @@ def box(x):
 
 
 def lanczos3(x):
-    return (((np.sin(pi * x) * np.sin(pi * x / 3) + np.finfo(np.float32).eps) /
-             ((pi ** 2 * x ** 2 / 3) + np.finfo(np.float32).eps))
-            * (abs(x) < 3))
+    return (
+        (np.sin(pi * x) * np.sin(pi * x / 3) + np.finfo(np.float32).eps)
+        / ((pi**2 * x**2 / 3) + np.finfo(np.float32).eps)
+    ) * (abs(x) < 3)
 
 
 def linear(x):
