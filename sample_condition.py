@@ -3,6 +3,7 @@ import os
 import argparse
 import yaml
 
+import numpy
 import torch
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
@@ -24,15 +25,28 @@ def load_yaml(file_path: str) -> dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_config", type=str)
-    parser.add_argument("--diffusion_config", type=str)
+    parser.add_argument(
+        "--model_config",
+        type=str,
+        default="./configs/model_config.yaml",
+    )
+    parser.add_argument(
+        "--diffusion_config",
+        type=str,
+        default="./configs/diffusion_config.yaml",
+    )
     parser.add_argument("--task_config", type=str)
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--save_dir", type=str, default="./results")
+    parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
     # Logger
     logger = get_logger()
+
+    # RNG
+    numpy.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
     # Device setting
     device_str = f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu"
@@ -121,7 +135,7 @@ def main():
         sample = sample_fn(
             x_start=x_start,
             measurement=y_n,
-            record=True,
+            record=False,
             save_root=out_path,
         )
 

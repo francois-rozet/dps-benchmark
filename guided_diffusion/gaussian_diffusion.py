@@ -208,6 +208,9 @@ class GaussianDiffusion:
                 noisy_measurement=noisy_measurement,
                 x_prev=img,
                 x_0_hat=out["pred_xstart"],
+                alpha=out["alpha"],
+                alpha_prev=out["alpha_prev"],
+                scale=out["scale"],
             )
             img = img.detach_()
 
@@ -396,35 +399,40 @@ class DDPM(SpacedDiffusion):
 
 @register_sampler(name="ddim")
 class DDIM(SpacedDiffusion):
-    def p_sample(self, model, x, t, eta=0.0):
+    def p_sample(self, model, x, t, eta=1.0):
+        alpha_t = extract_and_expand(self.alphas_cumprod, t, x)
+        alpha_s = extract_and_expand(self.alphas_cumprod_prev, t, x)
+
+        if t == 0:
+            sigma = 0
+        else:
+            sigma = (
+                eta
+                * torch.sqrt((1 - alpha_s) / (1 - alpha_t))
+                * torch.sqrt(1 - alpha_t / alpha_s)
+            )
+
         out = self.p_mean_variance(model, x, t)
 
-        eps = self.predict_eps_from_x_start(x, t, out["pred_xstart"])
-
-        alpha_bar = extract_and_expand(self.alphas_cumprod, t, x)
-        alpha_bar_prev = extract_and_expand(self.alphas_cumprod_prev, t, x)
-        sigma = (
-            eta
-            * torch.sqrt((1 - alpha_bar_prev) / (1 - alpha_bar))
-            * torch.sqrt(1 - alpha_bar / alpha_bar_prev)
-        )
-        # Equation 12.
-        noise = torch.randn_like(x)
-        mean_pred = (
-            out["pred_xstart"] * torch.sqrt(alpha_bar_prev)
-            + torch.sqrt(1 - alpha_bar_prev - sigma**2) * eps
+        x_0 = out["pred_xstart"]
+        eps = (x - torch.sqrt(alpha_t) * x_0) / torch.sqrt(1 - alpha_t)
+        x_s = (
+            torch.sqrt(alpha_s) * x_0
+            + torch.sqrt(1 - alpha_s - sigma**2) * eps
+            + sigma * torch.randn_like(x_0)
         )
 
-        sample = mean_pred
-        if t != 0:
-            sample += sigma * noise
+        scale = torch.sqrt(alpha_s) - torch.sqrt(1 - alpha_s - sigma**2) * torch.sqrt(
+            alpha_t
+        ) / torch.sqrt(1 - alpha_t)
 
-        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
-
-    def predict_eps_from_x_start(self, x_t, t, pred_xstart):
-        coef1 = extract_and_expand(self.sqrt_recip_alphas_cumprod, t, x_t)
-        coef2 = extract_and_expand(self.sqrt_recipm1_alphas_cumprod, t, x_t)
-        return (coef1 * x_t - pred_xstart) / coef2
+        return {
+            "sample": x_s,
+            "pred_xstart": x_0,
+            "alpha": alpha_s,
+            "alpha_prev": alpha_t,
+            "scale": scale,
+        }
 
 
 # =================
