@@ -126,6 +126,7 @@ class PseudoinverseGuided(ConditioningMethod):
         super().__init__(operator, noiser)
         self.maxiter = kwargs.get("maxiter", 1)
 
+    @torch.no_grad()
     def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
         x_s, x_t, y = x_t, x_prev, measurement
 
@@ -148,7 +149,7 @@ class PseudoinverseGuided(ConditioningMethod):
             return var_y * v + A(var_x_xt * At(v))
 
         error = y - y_hat
-        grad = conjugate_gradient(
+        grad = gmres(
             A=cov_y_xt,
             b=error,
             maxiter=self.maxiter,
@@ -168,6 +169,7 @@ class MomentMatching(ConditioningMethod):
         super().__init__(operator, noiser)
         self.maxiter = kwargs.get("maxiter", 1)
 
+    @torch.no_grad()
     def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
         x_s, x_t, y = x_t, x_prev, measurement
 

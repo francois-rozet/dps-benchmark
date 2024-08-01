@@ -2,18 +2,20 @@ import torch
 
 
 @torch.no_grad()
-def conjugate_gradient(A, b, x=None, maxiter=1):
+def conjugate_gradient(A, b, x=None, maxiter=1, dtype=torch.float64):
     if x is None:
         x = torch.zeros_like(b)
         r = b
     else:
         r = b - A(x)
 
+    x = x.to(dtype)
+    r = r.to(dtype)
     rr = torch.sum(r * r)
     p = r
 
     for _ in range(maxiter):
-        Ap = A(p)
+        Ap = A(p.to(b)).to(dtype)
         pAp = torch.sum(p * Ap)
         alpha = rr / pAp
         x_ = x + alpha * p
@@ -24,16 +26,16 @@ def conjugate_gradient(A, b, x=None, maxiter=1):
 
         x, r, rr, p = x_, r_, rr_, p_
 
-    return x
+    return x.to(b)
 
 
-def safe_normalize(x, threshold=1e-6):
+def safe_normalize(x, eps=1e-6):
     norm = torch.linalg.vector_norm(x)
 
     new_x = torch.where(
-        norm > threshold,
+        norm > eps,
         x / norm,
-        torch.zeros_like(x),
+        0.0,
     )
 
     return new_x, norm
@@ -48,8 +50,8 @@ def arnoldi(p, V, H, j):
     return new_p
 
 
-def cal_rotation(a, b):
-    c = torch.sqrt(a * a + b * b)
+def cal_rotation(a, b, eps=1e-6):
+    c = torch.clip(torch.sqrt(a * a + b * b), min=eps)
     return a / c, -b / c
 
 
@@ -65,26 +67,29 @@ def apply_rotation(H, cs, ss, j):
 
 
 @torch.no_grad()
-def gmres(A, b, x=None, maxiter=1):
+def gmres(A, b, x=None, maxiter=1, dtype=torch.float64):
     if x is None:
         x = torch.zeros_like(b)
         r = b
     else:
         r = b - A(x)
 
+    x = x.to(dtype)
+    r = r.to(dtype)
+
     new_v, norm = safe_normalize(r)
 
-    beta = torch.zeros(maxiter + 1, device=b.device)
+    beta = torch.zeros(maxiter + 1, dtype=dtype, device=b.device)
     beta[0] = norm
 
     V = []
     V.append(new_v)
-    H = torch.zeros((maxiter + 1, maxiter + 1), device=b.device)
-    cs = torch.zeros(maxiter, device=b.device)  # cosine values at each step
-    ss = torch.zeros(maxiter, device=b.device)  # sine values at each step
+    H = torch.zeros((maxiter + 1, maxiter + 1), dtype=dtype, device=b.device)
+    cs = torch.zeros(maxiter, dtype=dtype, device=b.device)
+    ss = torch.zeros(maxiter, dtype=dtype, device=b.device)
 
     for i in range(maxiter):
-        p = A(V[i])
+        p = A(V[i].to(b)).to(dtype)
         new_v = arnoldi(p, V, H, i + 1)  # Arnoldi iteration to get the i+1 th basis
         V.append(new_v)
 
@@ -94,11 +99,11 @@ def gmres(A, b, x=None, maxiter=1):
 
     V = torch.stack(V[:-1], dim=-1)
     y = torch.linalg.solve_triangular(
-        H[0 : i + 1, 0 : i + 1],
-        beta[0 : i + 1].unsqueeze(-1),
+        H[:-1, :-1] + 1e-6 * torch.eye(maxiter, dtype=dtype, device=b.device),
+        beta[:-1].unsqueeze(-1),
         upper=True,
     ).squeeze(-1)
 
-    sol = x + torch.einsum("...i,i", V, y)
+    x = x + torch.einsum("...i,i", V, y)
 
-    return sol
+    return x.to(b)
