@@ -1,6 +1,6 @@
 data:
   name: ffhq
-  root: ./data/super_resolution/
+  root: ./data/ffhq/
 
 measurement:
   operator:

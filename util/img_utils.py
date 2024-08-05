@@ -1,17 +1,18 @@
-import numpy as np
-import torch
-import scipy
-import torch.nn.functional as F
-from torch import nn
-from torch.autograd import Variable
-import matplotlib.pyplot as plt
-from motionblur.motionblur import Kernel
-from .fastmri_utils import fft2c_new, ifft2c_new
-
-
 """
 Helper functions for new types of inverse problems
 """
+
+import numpy as np
+import torch
+import scipy
+
+from motionblur.motionblur import Kernel
+from torch import nn
+from torch.nn import functional as F
+from torch.autograd import Variable
+
+
+from .fastmri_utils import fft2c_new, ifft2c_new
 
 
 def fft2(x):
@@ -36,35 +37,6 @@ def ifft2_m(x):
     if not torch.is_complex(x):
         x = x.type(torch.complex64)
     return torch.view_as_complex(ifft2c_new(torch.view_as_real(x)))
-
-
-def clear(x):
-    x = x.detach().cpu().squeeze().numpy()
-    return normalize_np(x)
-
-
-def clear_color(x):
-    if torch.is_complex(x):
-        x = torch.abs(x)
-    x = x.detach().cpu().squeeze().numpy()
-    return normalize_np(np.transpose(x, (1, 2, 0)))
-
-
-def normalize_np(img):
-    """Normalize img in arbitrary range to [0, 1]"""
-    img -= np.min(img)
-    img /= np.max(img)
-    return img
-
-
-def prepare_im(load_dir, image_size, device):
-    ref_img = torch.from_numpy(
-        normalize_np(plt.imread(load_dir)[:, :, :3].astype(np.float32))
-    ).to(device)
-    ref_img = ref_img.permute(2, 0, 1)
-    ref_img = ref_img.view(1, 3, image_size, image_size)
-    ref_img = ref_img * 2 - 1
-    return ref_img
 
 
 def fold_unfold(img_t, kernel, stride):
@@ -402,30 +374,3 @@ def total_variation_loss(img, weight):
     tv_h = ((img[:, :, 1:, :] - img[:, :, :-1, :]).pow(2)).mean()
     tv_w = ((img[:, :, :, 1:] - img[:, :, :, :-1]).pow(2)).mean()
     return weight * (tv_h + tv_w)
-
-
-if __name__ == "__main__":
-    import numpy as np
-    from torch import nn
-    import matplotlib.pyplot as plt
-
-    device = "cuda:0"
-    load_path = "/media/harry/tomo/FFHQ/256/test/00000.png"
-    img = torch.tensor(plt.imread(load_path)[:, :, :3])  # rgb
-    img = torch.permute(img, (2, 0, 1)).view(1, 3, 256, 256).to(device)
-
-    mask_len_range = (32, 128)
-    mask_prob_range = (0.3, 0.7)
-    image_size = 256
-    # mask
-    mask_gen = mask_generator(
-        mask_len_range=mask_len_range,
-        mask_prob_range=mask_prob_range,
-        image_size=image_size,
-    )
-    mask = mask_gen(img)
-
-    mask = np.transpose(mask.squeeze().cpu().detach().numpy(), (1, 2, 0))
-
-    plt.imshow(mask)
-    plt.show()

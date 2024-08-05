@@ -1,13 +1,13 @@
 data:
   name: ffhq
-  root: ./data/inpainting_random/
+  root: ./data/ffhq/
 
 measurement:
   operator:
     name: inpainting
   mask_opt:
     mask_type: random
-    mask_prob_range: !!python/tuple [0.99, 0.99]
+    mask_prob_range: !!python/tuple [0.98, 0.98]
     image_size: 256
 
   noise:

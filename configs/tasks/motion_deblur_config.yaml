@@ -1,6 +1,6 @@
 data:
   name: ffhq
-  root: ./data/motion_blur/
+  root: ./data/ffhq/
 
 measurement:
   operator:

@@ -1,6 +1,6 @@
 data:
   name: ffhq
-  root: ./data/samples/
+  root: ./data/ffhq/
 
 measurement:
   operator:

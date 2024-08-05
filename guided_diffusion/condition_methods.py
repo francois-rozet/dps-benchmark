@@ -52,7 +52,7 @@ class ConditioningMethod(ABC):
         pass
 
 
-@register_conditioning_method(name="vanilla")
+@register_conditioning_method(name="identity")
 class Identity(ConditioningMethod):
     # just pass the input without conditioning
     def conditioning(self, x_t):
@@ -86,7 +86,7 @@ class ManifoldConstraintGradient(ConditioningMethod):
         return x_t, norm
 
 
-@register_conditioning_method(name="ps")
+@register_conditioning_method(name="dps")
 class PosteriorSampling(ConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)
@@ -100,7 +100,7 @@ class PosteriorSampling(ConditioningMethod):
         return x_t, norm
 
 
-@register_conditioning_method(name="ps+")
+@register_conditioning_method(name="dps+")
 class PosteriorSamplingPlus(ConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)

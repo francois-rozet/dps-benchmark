@@ -1,12 +1,10 @@
 import math
-import os
-from functools import partial
-import matplotlib.pyplot as plt
 import numpy as np
+import os
 import torch
-from tqdm.auto import tqdm
 
-from util.img_utils import clear_color
+from tqdm.auto import tqdm
+from torchvision.transforms.functional import to_pil_image
 from .posterior_mean_variance import get_mean_processor, get_var_processor
 
 
@@ -182,8 +180,8 @@ class GaussianDiffusion:
         x_start,
         measurement,
         measurement_cond_fn,
-        record,
-        save_root,
+        record=False,
+        save_root=None,
     ):
         """
         The function used for sampling from noise.
@@ -215,12 +213,16 @@ class GaussianDiffusion:
             img = img.detach_()
 
             pbar.set_postfix({"distance": distance.item()}, refresh=False)
+
             if record:
                 if idx % 10 == 0:
                     file_path = os.path.join(
                         save_root, f"progress/x_{str(idx).zfill(4)}.png"
                     )
-                    plt.imsave(file_path, clear_color(img))
+
+                    snapshot = torch.clip((img + 1) / 2, 0, 1)
+                    snapshot = to_pil_image(snapshot)
+                    snapshot.save(file_path)
 
         return img
 

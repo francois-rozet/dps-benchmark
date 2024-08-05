@@ -1,6 +1,6 @@
 data:
   name: ffhq
-  root: ./data/inpainting_box/
+  root: ./data/ffhq/
 
 measurement:
   operator:
