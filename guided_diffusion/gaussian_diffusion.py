@@ -37,6 +37,7 @@ def create_sampler(
     clip_denoised,
     rescale_timesteps,
     timestep_respacing="",
+    eta=1.0,
 ):
     sampler = get_sampler(name=sampler)
 
@@ -52,6 +53,7 @@ def create_sampler(
         dynamic_threshold=dynamic_threshold,
         clip_denoised=clip_denoised,
         rescale_timesteps=rescale_timesteps,
+        eta=eta,
     )
 
 
@@ -386,22 +388,14 @@ class _WrappedModel:
         return self.model(x, new_ts, **kwargs)
 
 
-@register_sampler(name="ddpm")
-class DDPM(SpacedDiffusion):
-    def p_sample(self, model, x, t):
-        out = self.p_mean_variance(model, x, t)
-        sample = out["mean"]
-
-        noise = torch.randn_like(x)
-        if t != 0:  # no noise when t == 0
-            sample += torch.exp(0.5 * out["log_variance"]) * noise
-
-        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
-
-
 @register_sampler(name="ddim")
 class DDIM(SpacedDiffusion):
-    def p_sample(self, model, x, t, eta=1.0):
+    def __init__(self, eta=1.0, **kwargs):
+        super().__init__(**kwargs)
+
+        self.eta = eta
+
+    def p_sample(self, model, x, t):
         alpha_t = extract_and_expand(self.alphas_cumprod, t, x)
         alpha_s = extract_and_expand(self.alphas_cumprod_prev, t, x)
 
@@ -409,7 +403,7 @@ class DDIM(SpacedDiffusion):
             sigma = 0
         else:
             sigma = (
-                eta
+                self.eta
                 * torch.sqrt((1 - alpha_s) / (1 - alpha_t))
                 * torch.sqrt(1 - alpha_t / alpha_s)
             )

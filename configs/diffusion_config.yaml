@@ -1,4 +1,5 @@
 sampler: ddim
+eta: 1.0
 steps: 1000
 noise_schedule: linear
 model_mean_type: epsilon
