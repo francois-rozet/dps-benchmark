@@ -13,6 +13,9 @@ do
         # TMPD
         python run.py --task-config ./configs/tasks/${task}_config.yaml --method tmpd --maxiter 5 --steps $steps --basename ${task}_tmpd_${steps} --slurm &
 
+        # DiffPIR
+        python run.py --task-config ./configs/tasks/${task}_config.yaml --method diffpir --maxiter 5 --steps $steps --basename ${task}_diffpir_${steps} --slurm &
+
         # MMPS
         for maxiter in 1 5
         do

@@ -257,3 +257,45 @@ class TweedieProjected(ConditioningMethod):
         x_s = x_s + scale * grad
 
         return x_s, torch.linalg.vector_norm(error)
+
+
+@register_conditioning_method(name="diffpir")
+class DiffPIR(ConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        self.maxiter = kwargs.get("maxiter", 1)
+
+    @torch.no_grad()
+    def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
+        x_s, x_t, y = x_t, x_prev, measurement
+
+        alpha_s = kwargs["alpha"]
+        alpha_t = kwargs["alpha_prev"]
+        scale = kwargs["scale"]
+
+        def A(x):
+            return self.operator.forward(x, **kwargs)
+
+        with torch.enable_grad():
+            x_0_hat = x_0_hat.detach().requires_grad_()
+            y_hat = A(x_0_hat)
+
+        def At(y):
+            return torch.autograd.grad(y_hat, x_0_hat, y, retain_graph=True)[0]
+
+        var_x_xt = (1 - alpha_t) / alpha_t
+        var_y = self.noiser.sigma**2
+
+        def M(v):
+            return v + var_x_xt * At(A(v) / var_y)
+
+        error = y - y_hat
+        shift = gmres(
+            A=M,
+            b=var_x_xt * At(error / var_y),
+            maxiter=self.maxiter,
+        )
+
+        x_s = x_s + scale * shift
+
+        return x_s, torch.linalg.vector_norm(error)
