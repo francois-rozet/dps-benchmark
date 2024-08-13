@@ -208,3 +208,52 @@ class MomentMatching(ConditioningMethod):
         x_s = x_s + scale * grad
 
         return x_s, torch.linalg.vector_norm(error)
+
+
+@register_conditioning_method(name="tmpd")
+class TweedieProjected(ConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        self.maxiter = kwargs.get("maxiter", 1)
+
+    @torch.no_grad()
+    def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
+        x_s, x_t, y = x_t, x_prev, measurement
+
+        alpha_s = kwargs["alpha"]
+        alpha_t = kwargs["alpha_prev"]
+        scale = kwargs["scale"]
+
+        def A(x):
+            return self.operator.forward(x, **kwargs)
+
+        with torch.enable_grad():
+            y_hat = A(x_0_hat)
+
+        def At(y):
+            return torch.autograd.grad(y_hat, x_0_hat, y, retain_graph=True)[0]
+
+        var_t = (1 - alpha_t) / torch.sqrt(alpha_t)
+        var_y = self.noiser.sigma**2
+
+        def cov_x_xt(v):
+            return var_t * torch.autograd.grad(x_0_hat, x_t, v, retain_graph=True)[0]
+
+        var_x_xt = cov_x_xt(torch.ones_like(x_0_hat))
+
+        def cov_y_xt(v):
+            return var_y * v + A(var_x_xt * At(v))
+
+        error = y - y_hat
+        grad = gmres(
+            A=cov_y_xt,
+            b=error,
+            maxiter=self.maxiter,
+        )
+        grad = At(grad)
+        grad = torch.autograd.grad(x_0_hat, x_t, grad)[0]
+        grad = var_t * grad
+
+        x_s = x_s + scale * grad
+
+        return x_s, torch.linalg.vector_norm(error)

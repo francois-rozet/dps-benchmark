@@ -10,6 +10,9 @@ do
         # PGDM
         python run.py --task-config ./configs/tasks/${task}_config.yaml --method pgdm --maxiter 5 --steps $steps --basename ${task}_pgdm_${steps} --slurm &
 
+        # TMPD
+        python run.py --task-config ./configs/tasks/${task}_config.yaml --method tmpd --maxiter 5 --steps $steps --basename ${task}_tmpd_${steps} --slurm &
+
         # MMPS
         for maxiter in 01 05
         do
