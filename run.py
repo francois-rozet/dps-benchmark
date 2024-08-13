@@ -218,7 +218,7 @@ if __name__ == "__main__":
                 cpus=1,
                 gpus=1,
                 ram="16GB",
-                time="15:00",
+                time="06:00:00",
                 partition="gpu",
             ),
             name=args.basename,

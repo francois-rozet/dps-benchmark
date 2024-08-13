@@ -2,7 +2,7 @@
 
 This fork of the [official DPS repository](https://github.com/DPS2022/diffusion-posterior-sampling) is adapted to benchmark diffusion posterior sampling algorithms, including [DPS](https://arxiv.org/abs/2209.14687), [PiGDM](https://openreview.net/forum?id=9_gsMA8MRKQ), [TMPD](https://arxiv.org/abs/2310.06721) and [MMPS](https://arxiv.org/abs/2405.13712).
 
-![cover-img](./figures/cover.jpg)
+![cover-img](./assets/cover.jpg)
 
 ## Getting started
 

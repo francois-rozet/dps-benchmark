@@ -1,3 +1,4 @@
+from datasets import load_dataset
 from glob import glob
 from PIL import Image
 from typing import Callable, Optional
@@ -50,6 +51,28 @@ class FFHQDataset(VisionDataset):
     def __getitem__(self, index: int):
         fpath = self.fpaths[index]
         img = Image.open(fpath).convert("RGB")
+
+        if self.transforms is not None:
+            img = self.transforms(img)
+
+        return img
+
+
+@register_dataset(name="ffhq-remote")
+class FFHQRemoteDataset(VisionDataset):
+    def __init__(self, root: str = None, transforms: Optional[Callable] = None):
+        super().__init__(root, transforms)
+
+        ds = load_dataset("merkol/ffhq-256", split="train", streaming=True)
+        ds = ds.take(100)
+
+        self.images = [row["image"].convert("RGB") for row in ds]
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index: int):
+        img = self.images[index]
 
         if self.transforms is not None:
             img = self.transforms(img)
