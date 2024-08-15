@@ -158,7 +158,7 @@ class PseudoinverseGuided(ConditioningMethod):
         grad = torch.autograd.grad(x_0_hat, x_t, grad)[0]
         grad = var_x_xt * grad
 
-        x_s = x_s + torch.sqrt(alpha_t) * grad
+        x_s = x_s + torch.sqrt(alpha_s * alpha_t) * grad  # from https://github.com/NVlabs/RED-diff
 
         return x_s, torch.linalg.vector_norm(error)
 
@@ -264,6 +264,7 @@ class DiffPIR(ConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)
         self.maxiter = kwargs.get("maxiter", 1)
+        self.lmbda = kwargs.get("lmbda", 8.0)  # from Table 3 in Appendix B
 
     @torch.no_grad()
     def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
@@ -283,7 +284,7 @@ class DiffPIR(ConditioningMethod):
         def At(y):
             return torch.autograd.grad(y_hat, x_0_hat, y, retain_graph=True)[0]
 
-        var_x_xt = (1 - alpha_t) / alpha_t
+        var_x_xt = 1 / self.lmbda * (1 - alpha_t) / alpha_t
         var_y = self.noiser.sigma**2
 
         def M(v):
