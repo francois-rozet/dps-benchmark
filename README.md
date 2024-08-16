@@ -1,16 +1,14 @@
-# DPS Benchmark
+# MMPS Benchmark
 
-This fork of the [official DPS repository](https://github.com/DPS2022/diffusion-posterior-sampling) is adapted to benchmark diffusion posterior sampling algorithms, including [DPS](https://arxiv.org/abs/2209.14687), [PiGDM](https://openreview.net/forum?id=9_gsMA8MRKQ), [TMPD](https://arxiv.org/abs/2310.06721) and [MMPS](https://arxiv.org/abs/2405.13712).
-
-![cover-img](./assets/cover.jpg)
+This fork of the [official DPS repository](https://github.com/DPS2022/diffusion-posterior-sampling) is adapted to benchmark diffusion posterior sampling algorithms, including [DPS](https://arxiv.org/abs/2209.14687), [PiGDM](https://openreview.net/forum?id=9_gsMA8MRKQ), [TMPD](https://arxiv.org/abs/2310.06721) and [DiffPIR](https://arxiv.org/abs/2305.08995) against [MMPS](https://arxiv.org/abs/2405.13712).
 
 ## Getting started
 
 1. Clone the repository and its dependencies
 
     ```
-    git clone https://github.com/francois-rozet/dps-benchmark
-    cd dps-benchmark
+    git clone https://github.com/francois-rozet/mmps-benchmark
+    cd mmps-benchmark
     git clone https://github.com/VinAIResearch/blur-kernel-space-exploring bkse
     git clone https://github.com/LeviBorodenko/motionblur motionblur
     ```
@@ -35,6 +33,8 @@ This fork of the [official DPS repository](https://github.com/DPS2022/diffusion-
     python run.py \
     --model-config ./configs/model_ffhq_config.yaml \
     --task-config ./configs/tasks/inpainting_random_config.yaml \
-    --method dps --steps 1000 \
+    --method mmps --steps 100 --maxiter 5 \
     --seed 42 \
     ```
+
+    The generated images are saved in `/results` and the metrics are written in `metrics.csv`.
